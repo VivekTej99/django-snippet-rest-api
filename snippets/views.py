@@ -3,12 +3,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.http import Http404
 from snippets.models import Snippet
-from snippets.serializers import SnippetSerializer
+from snippets.serializers import SnippetSerializer, UserSerializer
+from django.contrib.auth.models import User
+from rest_framework import generics 
+from rest_framework import permissions
+from snippets.permissions import IsOwnerOrReadOnly
+
 
 class SnippetList(APIView):
     """
     List all snippets, or create a new one.
     """
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(owner= self.request.user)
 
     def get(self, request, format= None):
         snippets = Snippet.objects.all()
@@ -18,7 +27,7 @@ class SnippetList(APIView):
     def post(self, request, format= None):
         serializer = SnippetSerializer(data= request.data)
         if serializer.is_valid():
-            serializer.save()
+            self.perform_create(serializer)
             return Response(serializer.data, status = status.HTTP_201_CREATED)
         return Response(serializer.errors, status= status.HTTP_400_BAD_REQUEST)
     
@@ -27,6 +36,10 @@ class SnippetDetail(APIView):
     """
     Retreive, Update or Delete a snippet.
     """
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(owner= self.request.user)
 
     def get_object(self, pk):
         try:
@@ -47,7 +60,7 @@ class SnippetDetail(APIView):
             snippet = self.get_object(pk)
             serializer = SnippetSerializer(snippet, data= request.data)
             if serializer.is_valid():
-                serializer.save()
+                self.perform_create(serializer)
                 return Response(serializer.data, status = status.HTTP_200_OK)
             return Response(serializer.errors, status = status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -60,6 +73,19 @@ class SnippetDetail(APIView):
             return Response(status = status.HTTP_204_NO_CONTENT)
         except Exception as e:
             return Response({"message":"Internal Error", "error": str(e)}, status= status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class UserList(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+class UserDetail(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+
 
 # @api_view(["GET", "PUT", "DELETE"])
 # def snippet_detail(request, pk,format= None):
